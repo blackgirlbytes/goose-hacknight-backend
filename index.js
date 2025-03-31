@@ -12,7 +12,23 @@ const port = process.env.PORT || 5000;
 function loadConfig() {
   try {
     const configPath = path.join(__dirname, 'config.json');
-    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    console.log('Loading config from:', configPath);
+    
+    // Check if file exists
+    if (!fs.existsSync(configPath)) {
+      console.log('Config file does not exist, creating default config');
+      const defaultConfig = { registrationEnabled: false };
+      fs.writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2));
+      return defaultConfig;
+    }
+
+    // Read and parse config
+    const configContent = fs.readFileSync(configPath, 'utf8');
+    console.log('Raw config content:', configContent);
+    
+    const config = JSON.parse(configContent);
+    console.log('Parsed config:', config);
+    
     return config;
   } catch (error) {
     console.error('Error loading config:', error);
@@ -154,6 +170,31 @@ async function deleteKey(keyHash) {
   }
 }
 
+// Disable a specific key
+async function disableKey(keyHash) {
+  try {
+    const response = await fetch(`https://openrouter.ai/api/v1/keys/${keyHash}`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        disabled: true
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to disable key: ${response.statusText}`);
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error disabling key:', error);
+    throw error;
+  }
+}
+
 // Add a root route handler
 app.get('/', (req, res) => {
   res.json({ message: 'Goose Hacknight API is running' });
@@ -162,6 +203,7 @@ app.get('/', (req, res) => {
 // Endpoint to check registration status
 app.get('/api/registration-status', (req, res) => {
   const config = loadConfig();
+  console.log('Current registration status:', config.registrationEnabled);
   res.json({
     registrationEnabled: config.registrationEnabled
   });
@@ -171,6 +213,7 @@ app.post('/api/invite', async (req, res) => {
   try {
     // Check if registration is enabled
     const config = loadConfig();
+    console.log('Checking registration status for invite:', config.registrationEnabled);
     if (!config.registrationEnabled) {
       return res.status(403).json({
         success: false,
@@ -251,6 +294,31 @@ app.post('/api/admin/keys/delete-all', adminAuth, async (req, res) => {
     res.status(500).json({ 
       success: false,
       message: 'Failed to delete keys', 
+      error: error.message 
+    });
+  }
+});
+
+// Disable all keys
+app.post('/api/admin/keys/disable-all', adminAuth, async (req, res) => {
+  try {
+    const keys = (await listKeys()).data;
+    await Promise.all(
+      keys.map(key => disableKey(key.hash))
+    );
+    
+    // Fetch updated keys list after disabling
+    const updatedKeys = await listKeys();
+    
+    res.json({
+      success: true,
+      message: `Successfully disabled ${keys.length} keys`,
+      data: updatedKeys.data
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to disable keys', 
       error: error.message 
     });
   }
