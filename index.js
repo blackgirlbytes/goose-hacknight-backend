@@ -119,7 +119,8 @@ async function createOpenRouterKey(email) {
       key: data.key,
       keyHash: data.hash,
       limit: data.limit,
-      name: data.name
+      name: data.name,
+      disabled: data.disabled
     };
   } catch (error) {
     console.error('Error creating OpenRouter key:', error);
@@ -130,23 +131,60 @@ async function createOpenRouterKey(email) {
 // List existing keys
 async function listKeys() {
   try {
-    const response = await fetch('https://openrouter.ai/api/v1/keys', {
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    console.log('Starting to fetch keys...');
+    let allKeys = [];
+    let offset = 0;
+    let hasMore = true;
 
-    if (!response.ok) {
-      throw new Error(`Failed to list keys: ${response.statusText}`);
+    // Fetch all pages of keys
+    while (hasMore) {
+      console.log(`Fetching keys with offset ${offset}...`);
+      const url = `https://openrouter.ai/api/v1/keys?include_disabled=true&offset=${offset}`;
+      console.log('Requesting URL:', url);
+      
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Failed response:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        });
+        throw new Error(`Failed to list keys: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log('Received data:', data);
+      
+      const keys = data.data || [];
+      console.log(`Found ${keys.length} keys in this page`);
+      allKeys = allKeys.concat(keys);
+
+      // Check if we need to fetch more pages
+      if (keys.length < 100) {
+        hasMore = false;
+      } else {
+        offset += 100;
+      }
     }
 
-    return await response.json();
+    console.log(`Total keys found: ${allKeys.length}`);
+    return {
+      data: allKeys
+    };
   } catch (error) {
     console.error('Error listing keys:', error);
     throw error;
   }
 }
+
 
 // Delete a specific key
 async function deleteKey(keyHash) {
@@ -173,6 +211,7 @@ async function deleteKey(keyHash) {
 // Disable a specific key
 async function disableKey(keyHash) {
   try {
+    console.log(`Disabling key: ${keyHash}`);
     const response = await fetch(`https://openrouter.ai/api/v1/keys/${keyHash}`, {
       method: 'PATCH',
       headers: {
@@ -185,12 +224,20 @@ async function disableKey(keyHash) {
     });
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Failed to disable key:', {
+        status: response.status,
+        statusText: response.statusText,
+        body: errorText
+      });
       throw new Error(`Failed to disable key: ${response.statusText}`);
     }
 
-    return true;
+    const data = await response.json();
+    console.log(`Successfully disabled key ${keyHash}:`, data);
+    return data;
   } catch (error) {
-    console.error('Error disabling key:', error);
+    console.error(`Error disabling key ${keyHash}:`, error);
     throw error;
   }
 }
@@ -252,6 +299,7 @@ app.post('/api/invite', async (req, res) => {
       keyHash: keyData.keyHash,
       limit: keyData.limit,
       name: keyData.name,
+      disabled: keyData.disabled,
       message: 'Your OpenRouter API key has been created successfully.'
     });
 
@@ -302,20 +350,36 @@ app.post('/api/admin/keys/delete-all', adminAuth, async (req, res) => {
 // Disable all keys
 app.post('/api/admin/keys/disable-all', adminAuth, async (req, res) => {
   try {
+    console.log('Starting disable-all operation...');
     const keys = (await listKeys()).data;
-    await Promise.all(
-      keys.map(key => disableKey(key.hash))
+    console.log(`Found ${keys.length} keys to disable`);
+    
+    const disabledKeys = await Promise.all(
+      keys.map(async (key) => {
+        try {
+          const result = await disableKey(key.hash);
+          return {
+            ...key,
+            disabled: true
+          };
+        } catch (error) {
+          console.error(`Failed to disable key ${key.hash}:`, error);
+          return key; // Return original key if disable failed
+        }
+      })
     );
     
-    // Fetch updated keys list after disabling
+    // Fetch fresh key data to ensure we have the latest state
     const updatedKeys = await listKeys();
+    console.log('Updated keys after disable-all:', updatedKeys);
     
     res.json({
       success: true,
-      message: `Successfully disabled ${keys.length} keys`,
+      message: `Successfully processed ${keys.length} keys`,
       data: updatedKeys.data
     });
   } catch (error) {
+    console.error('Error in disable-all:', error);
     res.status(500).json({ 
       success: false,
       message: 'Failed to disable keys', 
