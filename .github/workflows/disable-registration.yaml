@@ -1,0 +1,39 @@
+name: Disable Registration
+
+on:
+  workflow_dispatch:  # This allows manual triggering from GitHub UI
+
+jobs:
+  disable-registration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Debug Directory
+        run: |
+          pwd
+          ls -la
+          ls -la server || echo "No server directory found"
+      
+      - name: Disable Registration
+        run: |
+          mkdir -p server
+          echo '{
+            "registrationEnabled": false
+          }' > server/config.json
+          cat server/config.json
+          
+      - name: Commit changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add server/config.json
+          git status
+          git commit -m "Disable registration"
+          
+      - name: Push changes
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.PAT }}
+          branch: ${{ github.ref }}
+          force: true  # Add this to force push changes
