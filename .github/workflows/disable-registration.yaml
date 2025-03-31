@@ -20,14 +20,14 @@ jobs:
           mkdir -p server
           echo '{
             "registrationEnabled": false
-          }' > server/config.json
-          cat server/config.json
+          }' > config.json
+          cat config.json
           
       - name: Commit changes
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add server/config.json
+          git add config.json
           git status
           git commit -m "Disable registration"
           
