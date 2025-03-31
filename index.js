@@ -2,9 +2,23 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 const port = process.env.PORT || 5000;
+
+// Load registration configuration
+function loadConfig() {
+  try {
+    const configPath = path.join(__dirname, 'config.json');
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    return config;
+  } catch (error) {
+    console.error('Error loading config:', error);
+    return { registrationEnabled: false }; // Default to disabled if config can't be loaded
+  }
+}
 
 app.use(cors());
 app.use(express.json());
@@ -145,8 +159,25 @@ app.get('/', (req, res) => {
   res.json({ message: 'Goose Hacknight API is running' });
 });
 
+// Endpoint to check registration status
+app.get('/api/registration-status', (req, res) => {
+  const config = loadConfig();
+  res.json({
+    registrationEnabled: config.registrationEnabled
+  });
+});
+
 app.post('/api/invite', async (req, res) => {
   try {
+    // Check if registration is enabled
+    const config = loadConfig();
+    if (!config.registrationEnabled) {
+      return res.status(403).json({
+        success: false,
+        message: 'Registration is currently closed'
+      });
+    }
+
     const { email } = req.body;
 
     if (!email) {
