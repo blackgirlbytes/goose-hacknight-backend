@@ -84,7 +84,7 @@ async function checkExistingEmail(email) {
     }
 
     // Search for a key with matching email in name
-    const expectedName = `Goose Hacknight - ${email}`;
+    const expectedName = `Sydney Hacknight - ${email}`;
     return allKeys.some(key => key.name === expectedName);
   } catch (error) {
     console.error('Error checking existing email:', error);
