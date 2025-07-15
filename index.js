@@ -102,7 +102,7 @@ async function createOpenRouterKey(email) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        name: `Sydney Hacknight - ${email}`,
+        name: `Austin JS - ${email}`,
         label: email.replace('@', '-at-'), // Create a URL-safe label from email
         limit: parseInt(process.env.OPENROUTER_PRESET_CREDITS) || 5 // Default credit limit if not specified
       })
