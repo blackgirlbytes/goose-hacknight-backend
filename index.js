@@ -84,7 +84,7 @@ async function checkExistingEmail(email) {
     }
 
     // Search for a key with matching email in name
-    const expectedName = `Denver - ${email}`;
+    const expectedName = `SF GitHub Hack Night - ${email}`;
     return allKeys.some(key => key.name === expectedName);
   } catch (error) {
     console.error('Error checking existing email:', error);
@@ -102,7 +102,7 @@ async function createOpenRouterKey(email) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        name: `Denver - ${email}`,
+        name: `SF GitHub Hack Night - ${email}`,
         label: email.replace('@', '-at-'), // Create a URL-safe label from email
         limit: parseInt(process.env.OPENROUTER_PRESET_CREDITS) || 5 // Default credit limit if not specified
       })
